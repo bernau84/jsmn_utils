@@ -4,4 +4,4 @@
 * access tokens trough symbolic x-path
 * writer/composer/export of json
 * basic unit tests/examples included
-* no dynamic allocation, pure c syntax, 'english' comments
+* no dynamic allocation, 'english' comments

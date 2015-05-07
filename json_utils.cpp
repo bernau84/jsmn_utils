@@ -18,10 +18,10 @@
  *  @param st - byte storage
  *  @param st_sz - byte-size of storage
  */
-int jsmn_utils_init_man(json_manager *man, jsmntok_t *atok, size_t atok_sz, 
+int jsmn_utils_init(json_manager *man, jsmntok_t *atok, size_t atok_sz,
                                   char *st, size_t st_sz) {
 
-    if(!man || !atok || !st || !atok_sz || !st_sz)
+    if(!man || !atok || !atok_sz)
       return JSMN_ERROR_NOMEM;
 
     man->p = st;
@@ -34,6 +34,28 @@ int jsmn_utils_init_man(json_manager *man, jsmntok_t *atok, size_t atok_sz,
 
     man->toksuper = -1;  /*! not pointer - for comaptibility with parser */
     man->colsuper = 0;  
+
+    // using alocated man to deserialize json string automaticaly
+    if(man->p && man->p[0] && man->size){ //given data could be the valid json?
+
+        //uses jasmine parser
+        jsmn_parser parser = { //local copy instead of man::jsmn_parser
+          man->pos,
+          man->toknext,
+          man->toksuper
+        };
+
+        int ret = jsmn_parse(&parser,
+                             man->p, man->size,
+                             man->tokens, man->toksize);
+
+        //put back
+        man->pos = parser.pos;
+        man->toknext = parser.toknext;
+        man->toksuper = parser.toksuper;
+
+        return ret;
+    }
 
     return 1;
 }
@@ -248,43 +270,72 @@ int jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, float val) {
 
  *  for example - "\config\users\@5\name" //acess the key token itself
  *              - "\config\rf\@5\address\@1" //acess the value of key
+ *
+ * \todo - otestovat!
  */
-jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *path) {
-    
-  const char *ap = path;
+jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *xpath) {
    
-  if(!man)
+  if(!man || !xpath)
     return NULL;
 
-  for(jsmntok_t *tok = &man->tokens[0]; (*ap) && (tok < &man->tokens[man->toknext]); tok++){
+  int iparent = -1;  //supperior token index backup for searching
+  int count = -1;  //length of serching string or order of item in array
 
-      switch(*ap){
-        case '@': {
+  for(jsmntok_t *tok = &man->tokens[0]; tok < &man->tokens[man->toknext]; ){
 
-          int shift = 0;
-          if(1 == sscanf(&ap[1], "%d", &shift))
-            tok += shift;
-          ap = strchr(ap+1, '\\');
-        } break;
-      
-        case '\\': {
-        
-          ap += 1;
-          const char *ep = strchr(ap+1, '\\');
-          if(!ep) ep += strlen(ap);
-          if(memcmp(ap, &man->p[tok->start], ep - ap)){
-            
-            ap = ep;
-            if(0 == *ep){ //the end of path
+      switch(*xpath){
 
-              return tok;
-            }
-          }
-        } break;
-      
+        case 0:  //end of path? -> end of serching
+            return tok;
+        break;
+
+        case '\\': //check ve stay on class / array
+            if((tok->type != JSMN_ARRAY) && (tok->type != JSMN_OBJECT))
+                return NULL;  //we cant search on primitive / stings
+
+            iparent = tok - &man->tokens[0];  //save reference to parent object/toksuper
+            count = -1; //enforce inititialization
+            xpath += 1; //move on next instruction
+            tok++;
+        break;
+
+        case '@': //iterrate trought sub-tokens
+            if(count < 0)
+                if(1 != sscanf(xpath, "@%d", &count))  //how much itteration?
+                    return NULL; //path error
+
+            //in counter is remaining number of iterrations now
+            //try to meet conditions of parenthesis and order
+            if(tok->parent == iparent)
+                count -= 1;
+
+            if(count) tok ++;
+        break;
+
         default:
+            //find key sub-token
+            if(count < 0){  //init search str len & check if it is not end of path
+
+                const char *ep = strchr(xpath, '\\');
+                count = (!ep) ? strlen(xpath) : ep - xpath;  //backup key size
+            }
+
+            if((tok->parent == iparent) && //is there affinity to reference object?
+               (tok->type == JSMN_STRING) && //object must be string
+               (count == (tok->end - tok->start)) &&  //and length must be equal
+               (0 == memcmp(xpath, &man->p[tok->start], count))){ //and finally if strings match
+
+                count = 0; //indicate we are done
+            }
+
+            tok ++;
         break;
       }
+
+      //evaluation - previous iteration was successful
+      if(count == 0) //prepare new search path nod
+          while((*xpath != '\\') && (*xpath != 0))//move behind recent path/dir
+              ++xpath;
   }
 
   return NULL;
@@ -294,9 +345,8 @@ jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *path) {
  * Return apropriate value of primitive
  *    see jsmn_utils_get_token for usage
  *    @return - JASON_PRIM_NAN if not exist or failure
- *    \todo - rework to template (?)
  */
-float jsmn_utils_read_primitive(json_manager *man, const char *path, float def = float(0.0/0)){
+float jsmn_utils_read_primitive(json_manager *man, const char *path, float def){
     
     float number;
   
@@ -309,6 +359,29 @@ float jsmn_utils_read_primitive(json_manager *man, const char *path, float def =
       return def;  
 
     if(1 != sscanf(&man->p[tok->start], "%g", &number))
+      return def;
+
+    return number;
+}
+
+/**
+ * Return apropriate value of primitive
+ *    see jsmn_utils_get_token for usage
+ *    @return - JASON_PRIM_NAN if not exist or failure
+ */
+int jsmn_utils_read_primitive(json_manager *man, const char *path, int def){
+
+    int number;
+
+    if(!man)
+      return def;
+
+    jsmntok_t *tok = jsmn_utils_get_token(man, path);
+
+    if((NULL == tok) || (tok->type != JSMN_PRIMITIVE)) //undesired type
+      return def;
+
+    if(1 != sscanf(&man->p[tok->start], "%d", &number))
       return def;
 
     return number;
@@ -329,50 +402,31 @@ const char *jsmn_utils_read_string(json_manager *man, const char *path) {
 }
 
 /**
- * Using previously alocated man to deserialize json string 
- * \note - embedd jsmn_parse()
+ * Space optimalization/shrink data only - exculde placeholder in token to shring
+ *    size to minimal on json data buffer directly; token array is not useful again!!
+ *
+ * \note this is lazy verzion - exclude placeholders characters only
+ * if you wish to continue with editing tokens you have to call
+ * parser again
  */
-int jsmn_utils_import(json_manager *man, const char *js, size_t js_len) {
+int jsmn_utils_done(json_manager *man) {
 
-   if(!man)
-      return NULL;
-  
-   jsmn_parser parser = { //local copy instead of man::jsmn_parser
-      man->pos,
-      man->toknext,
-      man->toksuper,
-   };
+    char *p_end = &man->p[man->pos];
+    char *p_red = man->p;
 
-   return jsmn_parse(&parser, js, js_len, man->tokens, man->toksize);
-}
+    for(char *p = man->p; p < p_end; p++)
+        if(*p != JSON_TOKEN_PLACEHOLDER_CH)
+            *p_red++ = *p; //copy useful key chars
 
-/**
- * Generate json serialization (it is almost preprared, just exclude 
- * non-printable chars act as placeholder
- */
-int jsmn_utils_export(json_manager *man, char *js, size_t js_len) {
+    if(p_red < p_end)
+        *p_red++ = 0;
 
-    char *j = js;
-    for(char *c = man->p; ((j - js) < js_len) && (c < &man->p[man->pos]); c++)
-      if(*c != JSON_TOKEN_PLACEHOLDER_CH) *j++ = *c;
+    /* reintit optionaly
+     * jsmn_utils_done(json_manager *man,
+     *              man->tokens, man->toksize,
+     *              man->p, man->size);
+     */
 
-    return j - js;
-}
-
-
-/**
- * Space optimalization - exculde placeholder in token to shring 
- *    size to minimal; intern buffer us than identical to json
- *    serialization
- */
-int jsmn_utils_shrink(json_manager *man, char *js, size_t js_len) {
-
-  return 0;
-
-  for(jsmntok_t *tok = &man->tokens[0]; tok < &man->tokens[man->toknext]; tok++){
-      /*! \todo - iterate troughe tokens and recount start and end pointers to 
-       *    new (optimized) length
-       */
-  }
+    return 1;
 }
 

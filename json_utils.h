@@ -28,21 +28,21 @@ typedef struct {
 	char *p;  /* pointer of data in the storage */
 	unsigned int size; /* overal length of storage */
 
-        jsmntok_t *tokens;
+    jsmntok_t *tokens;
 	unsigned int toksize;  /* number of tokens */
 } json_manager;
 
 
 
 //exports
-extern int         jsmn_utils_init_man(json_manager *man,
-                                       jsmntok_t *atok, size_t atok_sz,
-                                       char *st, size_t st_sz);
+extern int         jsmn_utils_init(json_manager *man,            //context for reader/writer
+                               jsmntok_t *atok, size_t atok_sz,  //tokens
+                               char *st, size_t st_sz);          //raw json data
 
 extern int         jsmn_utils_begin_child(json_manager *man, jsmntype_t type);
 extern int         jsmn_utils_end_child(json_manager *man);
 
-extern jsmntok_t  *jsmn_utils_new_token(json_manager *man, float val, size_t reserv = sizeof(0.0/0));
+extern jsmntok_t  *jsmn_utils_new_token(json_manager *man, float val, size_t reserv = 0);
 extern jsmntok_t  *jsmn_utils_new_token(json_manager *man, const char *str, size_t reserv = 0);
 
 extern int         jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, const char *val);
@@ -51,10 +51,10 @@ extern int         jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, co
 
 extern jsmntok_t  *jsmn_utils_get_token(json_manager *man, const char *path);
 extern float       jsmn_utils_read_primitive(json_manager *man, const char *path, float def);
+extern int         jsmn_utils_read_primitive(json_manager *man, const char *path, int def);
 extern const char *jsmn_utils_read_string(json_manager *man, const char *path); 
 
-extern int         jsmn_utils_import(json_manager *man, const char *js, size_t js_len);
-extern int         jsmn_utils_export(json_manager *man, char *js, size_t js_len);
+extern int         jsmn_utils_done(json_manager *man);   //exportuje
 
 //aliases
 #define jsmn_utils_begin_array(MAN) jsmn_utils_begin_child(MAN, JSMN_ARRAY)

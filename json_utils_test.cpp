@@ -6,11 +6,7 @@
 
 bool jsmn_test_parser(){
 
-    jsmntok_t ljtok[100];
-    memset(ljtok, 0, sizeof(ljtok));
-    char ljarr[100];
-
-    const char ljs[] = {
+   char ljs[] = {
 
           "\"nubers\": [\n"
             "1.0, 2.1, 3.2, 3.4, 4.5, 5.6\n"
@@ -46,31 +42,85 @@ bool jsmn_test_parser(){
           "]\n"
     };
 
-  json_manager ljman;
-  jsmn_utils_init_man(&ljman, ljtok, 100, ljarr, sizeof(ljarr));
-  return (0 < jsmn_utils_import(&ljman, ljs, sizeof(ljs)));
+    jsmntok_t ljtok[100];
+    json_manager ljman;
+    return (0 < jsmn_utils_init(&ljman, ljtok, 100, ljs, sizeof(ljs)));
+}
+
+bool jsmn_test_readout(){
+
+    char rpcList[] =
+            "[\r\n"
+                "\t{\r\n"
+                    "\t\t\"c\": 10010,\r\n"
+                    "\t\t\"n\": \"jun-ack\",\r\n"
+                    "\t\t\"t\": \"2015-04-12T03:04:05+01:00\",\r\n"
+                    "\t\t\"p\": [1234, \"text\", 1.125],\r\n"
+                    "\t\t\"ref\": 10009,\r\n"
+                    "\t\t\"ack\": false\r\n"
+                "\t},\r\n"
+                "\t{\r\n"
+                    "\t\t\"c\": 10011,\r\n"
+                    "\t\t\"n\": \"jun-badRpc\",\r\n"
+                    "\t\t\"t\": \"2015-04-12T03:04:05+01:00\",\r\n"
+                    "\t\t\"p\": [\"mime-parse\", -55],\r\n"
+                    "\t\t\"ref\": 10008,\r\n"
+                    "\t\t\"pri\": 12,\r\n"
+                    "\t\t\"ack\": false\r\n"
+                "\t}\r\n"
+            "]\r\n,"
+            "\"offtopic\": \"debug-comments\"\r\n";
+
+    jsmntok_t ljtok[100];
+    json_manager ljman;
+
+    jsmn_utils_init(&ljman, ljtok, 100, rpcList, sizeof(rpcList));
+
+    if(10010 != jsmn_utils_read_primitive(&ljman, "\\@1\\c", 0))
+        return false;
+    if(memcmp(jsmn_utils_read_string(&ljman, "\\@1\\n"), "jun-ack", 7))
+        return false;
+    if(memcmp(jsmn_utils_read_string(&ljman, "\\@1\\p\\@2"), "text", 4))
+        return false;
+    if(1234 != jsmn_utils_read_primitive(&ljman, "\\@1\\p\\@1", 0))
+        return false;
+    if(1.125 != jsmn_utils_read_primitive(&ljman, "\\@1\\p\\@3", (float)0.0))
+        return false;
+    if(10011 != jsmn_utils_read_primitive(&ljman, "\\@2\\c", 0))
+        return false;
+    if(memcmp(jsmn_utils_read_string(&ljman, "\\@2\\n"), "jun-badRpc", 10))
+        return false;
+    if(memcmp(jsmn_utils_read_string(&ljman, "\\@2\\p\\@1"), "mime-parse", 10))
+        return false;
+    if(-55 != jsmn_utils_read_primitive(&ljman, "\\@2\\p\\@2", 0))
+        return false;
+    if(12 != jsmn_utils_read_primitive(&ljman, "\\@2\\pri", 0))
+        return false;
+    if(memcmp(jsmn_utils_read_string(&ljman, "offtopic"), "debug-comments", 14))
+        return false;
+    return true;
 }
 
 bool jsmn_test_composer(){
 
-  jsmntok_t ljtok[100];
-  char ljarr[1024];
-  char ljs[1024];
   json_manager ljman;
-  jsmn_utils_init_man(&ljman, ljtok, 100, ljarr, sizeof(ljarr));
+  jsmntok_t ljtok[100];
+  char ljarr[1024] = "";
+
+  jsmn_utils_init(&ljman, ljtok, 100, ljarr, sizeof(ljarr));
 
   jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
       jsmn_utils_new_token(&ljman, "numbers");
       jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
         jsmn_utils_new_token(&ljman, 1.2, 8);
-        jsmn_utils_new_token(&ljman, 45E-1, 8);
+        jsmn_utils_new_token(&ljman, 45E-1, 8); //5
       jsmn_utils_end_child(&ljman);
 
       jsmn_utils_new_token(&ljman, "strings");
       jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
         jsmn_utils_new_token(&ljman, "one", 8);
         jsmn_utils_new_token(&ljman, "oneone", 8);
-        jsmn_utils_new_token(&ljman, "abcdefghijklmn", 8); //longer than expected - will see
+        jsmn_utils_new_token(&ljman, "abcdefghijklmn", 8); //10 //longer than expected - will see
       jsmn_utils_end_child(&ljman);
 
       jsmn_utils_new_token(&ljman, "rules");
@@ -81,7 +131,7 @@ bool jsmn_test_composer(){
           jsmn_utils_new_token(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
             jsmn_utils_new_token(&ljman, "+420725224100");
-            jsmn_utils_new_token(&ljman, "+420725224101");
+            jsmn_utils_new_token(&ljman, "+420725224101"); //19
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
         jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
@@ -90,7 +140,7 @@ bool jsmn_test_composer(){
           jsmn_utils_new_token(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
             jsmn_utils_new_token(&ljman, "prvni@jablocom.com");
-            jsmn_utils_new_token(&ljman, "nahradni@jablocom.com");
+            jsmn_utils_new_token(&ljman, "nahradni@jablocom.com");  //27
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
         jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
@@ -99,33 +149,29 @@ bool jsmn_test_composer(){
           jsmn_utils_new_token(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
             jsmn_utils_new_token(&ljman, "arc.alt.jablotron:10001");
-            jsmn_utils_new_token(&ljman, "arc.main.jablotron:10000");
+            jsmn_utils_new_token(&ljman, "arc.main.jablotron:10000"); //34
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
       jsmn_utils_end_child(&ljman);
   jsmn_utils_end_child(&ljman);
 
-  jsmn_utils_export(&ljman, ljs, sizeof(ljs));
+  int rem = ljman.toknext;
+  jsmn_utils_done(&ljman);
 
-  QFile lfile("json_unit_test_out.txt");
+  QFile lfile("json_unit_test_out.txt");  //export json data (for human control)
   if (!lfile.open(QIODevice::WriteOnly | QIODevice::Text))
       return false;
 
   QTextStream lout(&lfile);
-  lout << QString(ljs);
+  lout << QString(ljarr);
 
+  //parse shrink ljarr again
+  jsmn_utils_init(&ljman, ljtok, 100, ljarr, sizeof(ljarr));
 
-//  jsmn_parser ljrd;
-//  jsmntok_t ljtrd[100];
-//  jsmn_init(&ljrd);
-//  jsmn_parse(&ljrd, ljarr, strlen(ljarr), ljtrd, 100);
+  //number of tokens should remain unchanged
+  if(rem != ljman.toknext)
+      return false;
 
-  /*
-  /todo - kontrola poctu polozek; musi sedet
-  /todo - musi sedet typ polozek
-  /todo - tam kde se to vleze odpovida i hodnota polozek
-  */
-
-  return false;
+  return true;
 }
 

@@ -1,8 +1,4 @@
-
 #include "json_utils.h"
-#include <QFile>
-#include <QTextStream>
-#include <QString>
 
 bool jsmn_test_parser(){
 
@@ -76,25 +72,25 @@ bool jsmn_test_readout(){
 
     jsmn_utils_init(&ljman, ljtok, 100, rpcList, sizeof(rpcList));
 
-    if(10010 != jsmn_utils_read_primitive(&ljman, "\\@1\\c", 0))
+    if(10010 != jsmn_utils_read_int(&ljman, "\\@1\\c", 0))
         return false;
     if(memcmp(jsmn_utils_read_string(&ljman, "\\@1\\n"), "jun-ack", 7))
         return false;
     if(memcmp(jsmn_utils_read_string(&ljman, "\\@1\\p\\@2"), "text", 4))
         return false;
-    if(1234 != jsmn_utils_read_primitive(&ljman, "\\@1\\p\\@1", 0))
+    if(1234 != jsmn_utils_read_int(&ljman, "\\@1\\p\\@1", 0))
         return false;
-    if(1.125 != jsmn_utils_read_primitive(&ljman, "\\@1\\p\\@3", (float)0.0))
+    if(1.125 != jsmn_utils_read_double(&ljman, "\\@1\\p\\@3", 0.0))
         return false;
-    if(10011 != jsmn_utils_read_primitive(&ljman, "\\@2\\c", 0))
+    if(10011 != jsmn_utils_read_int(&ljman, "\\@2\\c", 0))
         return false;
     if(memcmp(jsmn_utils_read_string(&ljman, "\\@2\\n"), "jun-badRpc", 10))
         return false;
     if(memcmp(jsmn_utils_read_string(&ljman, "\\@2\\p\\@1"), "mime-parse", 10))
         return false;
-    if(-55 != jsmn_utils_read_primitive(&ljman, "\\@2\\p\\@2", 0))
+    if(-55 != jsmn_utils_read_int(&ljman, "\\@2\\p\\@2", 0))
         return false;
-    if(12 != jsmn_utils_read_primitive(&ljman, "\\@2\\pri", 0))
+    if(12 != jsmn_utils_read_int(&ljman, "\\@2\\pri", 0))
         return false;
     if(memcmp(jsmn_utils_read_string(&ljman, "offtopic"), "debug-comments", 14))
         return false;
@@ -110,60 +106,60 @@ bool jsmn_test_composer(){
   jsmn_utils_init(&ljman, ljtok, 100, ljarr, sizeof(ljarr));
 
   jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
-      jsmn_utils_new_token(&ljman, "numbers");
+      jsmn_utils_new_string(&ljman, "numbers");
       jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
-        jsmn_utils_new_token(&ljman, 1.2, 8);
-        jsmn_utils_new_token(&ljman, 45E-1, 8); //5
+        jsmn_utils_new_double(&ljman, 1.2, 8);
+        jsmn_utils_new_double(&ljman, 45E-1, 8); //5
       jsmn_utils_end_child(&ljman);
 
-      jsmn_utils_new_token(&ljman, "strings");
+      jsmn_utils_new_string(&ljman, "strings");
       jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
-        jsmn_utils_new_token(&ljman, "one", 8);
-        jsmn_utils_new_token(&ljman, "oneone", 8);
-        jsmn_utils_new_token(&ljman, "abcdefghijklmn", 8); //10 //longer than expected - will see
+        jsmn_utils_new_string(&ljman, "one", 8);
+        jsmn_utils_new_string(&ljman, "oneone", 8);
+        jsmn_utils_new_string(&ljman, "abcdefghijklmn", 8); //10 //longer than expected - will see
       jsmn_utils_end_child(&ljman);
 
-      jsmn_utils_new_token(&ljman, "rules");
+      jsmn_utils_new_string(&ljman, "rules");
       jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
         jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
-          jsmn_utils_new_token(&ljman, "path");
-          jsmn_utils_new_token(&ljman, 0.0, 2);
-          jsmn_utils_new_token(&ljman, "dest");
+          jsmn_utils_new_string(&ljman, "path");
+          jsmn_utils_new_int(&ljman, 0, 2);
+          jsmn_utils_new_string(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
-            jsmn_utils_new_token(&ljman, "+420725224100");
-            jsmn_utils_new_token(&ljman, "+420725224101"); //19
+            jsmn_utils_new_string(&ljman, "+420725224100");
+            jsmn_utils_new_string(&ljman, "+420725224101"); //19
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
         jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
-          jsmn_utils_new_token(&ljman, "path");
-          jsmn_utils_new_token(&ljman, 3, 2);
-          jsmn_utils_new_token(&ljman, "dest");
+          jsmn_utils_new_string(&ljman, "path");
+          jsmn_utils_new_int(&ljman, 3, 2);
+          jsmn_utils_new_string(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
-            jsmn_utils_new_token(&ljman, "prvni@jablocom.com");
-            jsmn_utils_new_token(&ljman, "nahradni@jablocom.com");  //27
+            jsmn_utils_new_string(&ljman, "prvni@jablocom.com");
+            jsmn_utils_new_string(&ljman, "nahradni@jablocom.com");  //27
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
         jsmn_utils_begin_child(&ljman, JSMN_OBJECT);
-          jsmn_utils_new_token(&ljman, "path");
-          jsmn_utils_new_token(&ljman, 3, 2);
-          jsmn_utils_new_token(&ljman, "dest");
+          jsmn_utils_new_string(&ljman, "path");
+          jsmn_utils_new_int(&ljman, 2, 2);
+          jsmn_utils_new_string(&ljman, "dest");
           jsmn_utils_begin_child(&ljman, JSMN_ARRAY);
-            jsmn_utils_new_token(&ljman, "arc.alt.jablotron:10001");
-            jsmn_utils_new_token(&ljman, "arc.main.jablotron:10000"); //34
+            jsmn_utils_new_string(&ljman, "arc.alt.jablotron:10001");
+            jsmn_utils_new_string(&ljman, "arc.main.jablotron:10000"); //34
           jsmn_utils_end_child(&ljman);
         jsmn_utils_end_child(&ljman);
       jsmn_utils_end_child(&ljman);
   jsmn_utils_end_child(&ljman);
 
-  int rem = ljman.toknext;
+  unsigned rem = ljman.toknext;
   jsmn_utils_done(&ljman);
 
-  QFile lfile("json_unit_test_out.txt");  //export json data (for human control)
-  if (!lfile.open(QIODevice::WriteOnly | QIODevice::Text))
-      return false;
+//  QFile lfile("json_unit_test_out.txt");  //export json data (for human control)
+//  if (!lfile.open(QIODevice::WriteOnly | QIODevice::Text))
+//      return false;
 
-  QTextStream lout(&lfile);
-  lout << QString(ljarr);
+//  QTextStream lout(&lfile);
+//  lout << QString(ljarr);
 
   //parse shrink ljarr again
   jsmn_utils_init(&ljman, ljtok, 100, ljarr, sizeof(ljarr));

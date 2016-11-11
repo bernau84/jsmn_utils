@@ -8,6 +8,7 @@ extern "C" {
 
 
 #define JSMN_PARENT_LINKS   //chained token
+#define JSMN_LEVEL   //level / deep of parsing 	
 #define JSMN_STRICT     //json strict format
 
 /**
@@ -57,6 +58,9 @@ typedef struct {
 	unsigned int pos; /* offset in the JSON string */
 	unsigned int toknext; /* next token to allocate */
 	int toksuper; /* superior token node, e.g parent object or array */
+#ifdef JSMN_LEVEL
+	int level;
+#endif //JSMN_LEVEL		
 } jsmn_parser;
 
 /**
@@ -67,9 +71,24 @@ void jsmn_init(jsmn_parser *parser);
 /**
  * Run JSON parser. It parses a JSON data string into and array of tokens, each describing
  * a single JSON object.
+ *
+ * \todo predelat tak aby to podporovalo maximalni hloubku do ktere se zanori
+ * pro ucely juniperu to bude slouzit tak ze chceme parsovat jen seznam rpc nikoli obsah parametru
+ * setrime tak tokeny
  */
 jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
-		jsmntok_t *tokens, unsigned int num_tokens);
+        jsmntok_t *tokens, unsigned int num_tokens);
+
+
+/**
+ * Run JSON parser with restricted deep of parsing
+ *
+ * \todo predelat tak aby to podporovalo maximalni hloubku do ktere se zanori
+ * pro ucely juniperu to bude slouzit tak ze chceme parsovat jen seznam rpc nikoli obsah parametru
+ * setrime tak tokeny
+ */
+jsmnerr_t jsmn_parse_restricted(jsmn_parser *parser, const char *js, size_t len,
+        jsmntok_t *tokens, unsigned int num_tokens, unsigned max_level);
 
 #ifdef __cplusplus
 }

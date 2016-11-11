@@ -84,7 +84,7 @@ found:
  * Filsl next token with JSON string.
  */
 static jsmnerr_t jsmn_parse_string(jsmn_parser *parser, const char *js,
-		size_t len, jsmntok_t *tokens, size_t num_tokens) {
+        size_t len, jsmntok_t *tokens, size_t num_tokens) {
 	jsmntok_t *token;
 
 	int start = parser->pos;
@@ -165,6 +165,9 @@ jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
 		switch (c) {
 			case '{': case '[':
 				count++;
+#ifdef JSMN_LEVEL  
+				parser->level += 1;
+#endif //JSMN_LEVEL					
 				if (tokens == NULL) {
 					break;
 				}
@@ -182,6 +185,10 @@ jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
 				parser->toksuper = parser->toknext - 1;
 				break;
 			case '}': case ']':
+#ifdef JSMN_LEVEL
+				if(parser->level > 0)
+					parser->level -= 1;
+#endif //JSMN_LEVEL	
 				if (tokens == NULL)
 					break;
 				type = (c == '}' ? JSMN_OBJECT : JSMN_ARRAY);
@@ -278,5 +285,6 @@ void jsmn_init(jsmn_parser *parser) {
 	parser->pos = 0;
 	parser->toknext = 0;
 	parser->toksuper = -1;
+    parser->level = 0;
 }
 

@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -11,12 +9,6 @@
 #endif //JSMN_PARENT_LINKS
 
 /**
- * Init json man
- *  @param write - man to be inited
- *  @param atok - array of tokens
- *  @param atok_sz - size of array of tokens
- *  @param st - byte storage
- *  @param st_sz - byte-size of storage
  */
 int jsmn_utils_init(json_manager *man, jsmntok_t *atok, size_t atok_sz,
                                   char *st, size_t st_sz) {
@@ -42,7 +34,8 @@ int jsmn_utils_init(json_manager *man, jsmntok_t *atok, size_t atok_sz,
         jsmn_parser parser = { //local copy instead of man::jsmn_parser
           man->pos,
           man->toknext,
-          man->toksuper
+          man->toksuper,
+          0
         };
 
         int ret = jsmn_parse(&parser,
@@ -61,14 +54,9 @@ int jsmn_utils_init(json_manager *man, jsmntok_t *atok, size_t atok_sz,
 }
 
 /**
- * Allocates a fresh unused token from the token pull
- *   Prepares place for token, white space delimiters and json parsing chracters for choosen type of token
- *    reserved space fo srtring is quoted at boundaries
- *    placeholde character will be excluded before exporting to json serialization
  */
-
 #define JSON_TOKEN_PLACEHOLDER_CH 0x3
-static jsmntok_t *jsmn_utils_new_token(json_manager *man, size_t reserv, jsmntype_t type) {
+jsmntok_t *jsmn_utils_new_token(json_manager *man, size_t reserv, jsmntype_t type) {
 
     if(!man && !reserv)   //token without size is not supported
       return NULL;
@@ -76,7 +64,7 @@ static jsmntok_t *jsmn_utils_new_token(json_manager *man, size_t reserv, jsmntyp
     if(man->toknext >= man->toksize)
       return NULL;
 
-    if((man->size - man->pos) < (man->colsuper + 8))  //+ some reserve for delimiters and json control characters
+    if((man->size - man->pos) < (reserv + 8))  //+ some reserve for delimiters and json control characters
       return NULL;
 
 
@@ -145,9 +133,6 @@ static jsmntok_t *jsmn_utils_new_token(json_manager *man, size_t reserv, jsmntyp
 }
 
 /**
- * Update general token in storage
- *    @param val - pointer atribute for printf
- *    @param format - formating string for printf
  */
 int jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, const char *f, ... ) {
 
@@ -155,28 +140,29 @@ int jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, const char *f, ..
       return JSMN_ERROR_INVAL;
 
     int n, space;
-    if(1 >= (space = (token->end - token->start + 1))) //+1 for \0
+    if(1 >= (space = (token->end - token->start)))
       return JSMN_ERROR_NOMEM;
 
-    char prep[256]; //prep[size] variable size doesnt work with vsnprintf ?!
+    memset(&man->p[token->start], JSON_TOKEN_PLACEHOLDER_CH, space);  //prepare
 
+    char prep[space/*256*/];
     va_list argptr;
     va_start(argptr, f);
+
     n = vsnprintf(prep, space, f, argptr); //n=<1, size-1>
     va_end(argptr);
 
     if(n <= 0)
         return 0;
 
+    if(n >= space) //retezec byl kracen => delka bez ukoncovaciho retezce je space-1
+        n = space - 1;
+
     memcpy(&man->p[token->start], prep, n);  //n is without \0
     return n;
 }
 
-
 /**
- * Begin inferior section
- *    @return -1 - no free token
- *            >0 - associated token index
  */
 int jsmn_utils_begin_child(json_manager *man, jsmntype_t type) {
 	
@@ -185,12 +171,12 @@ int jsmn_utils_begin_child(json_manager *man, jsmntype_t type) {
     if((type != JSMN_OBJECT) && (type != JSMN_ARRAY))
       return JSMN_ERROR_INVAL;
 
-    const char *del = (JSMN_OBJECT == type) ? "{\n" : "[\n";
+    const char *del = (JSMN_OBJECT == type) ? "{" : "[";
 
-    if(NULL == (tok = jsmn_utils_new_token(man, 2, type)))
+    if(NULL == (tok = jsmn_utils_new_token(man, 3, type)))
       return JSMN_ERROR_NOMEM;
 
-    jsmn_utils_fill_token(man, tok, "%s", del);
+    jsmn_utils_fill_token(man, tok, "%s\n", del);
 
     /* new superior token */
     man->toksuper = tok - man->tokens; //this index
@@ -198,9 +184,7 @@ int jsmn_utils_begin_child(json_manager *man, jsmntype_t type) {
     return 1;
 }
 
-
 /**
- * End inferior section
  */
 int jsmn_utils_end_child(json_manager *man) {
 
@@ -224,54 +208,26 @@ int jsmn_utils_end_child(json_manager *man) {
     return 1;
 }
 
-
 /**
- * Allocates a fresh string token
  */
-jsmntok_t *jsmn_utils_new_token(json_manager *man, const char *str, size_t reserv) {
+int jsmn_utils_read_token(json_manager *man, jsmntok_t *token, const char *f, ... ){
 
-    jsmntok_t *tok = jsmn_utils_new_token(man, (reserv) ? reserv : strlen(str), JSMN_STRING);
-    if(tok) jsmn_utils_fill_token(man, tok, "%s", str);
-    return tok;
+    if(!man || !token)
+      return JSMN_ERROR_INVAL;
+
+    int n, space;
+    if(1 >= (space = (token->end - token->start + 1))) //+1 for \0
+      return JSMN_ERROR_NOMEM;
+
+    va_list argptr;
+    va_start(argptr, f);
+    n = vsscanf(&man->p[token->start], f, argptr);
+    va_end(argptr);
+
+    return n;
 }
 
 /**
- * Allocates a fresh primitive token
- */
-jsmntok_t *jsmn_utils_new_token(json_manager *man, float val, size_t reserv) {
-
-    jsmntok_t *tok = jsmn_utils_new_token(man, reserv, JSMN_PRIMITIVE);
-    if(tok) jsmn_utils_fill_token(man, tok, "%g", val);
-    return tok;
-}
-
-/**
- * Update JSMN_STRING token in storage
- */
-int jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, const char *val) {
-
-    return jsmn_utils_fill_token(man, token, val, 0);
-}
- 
-/**
- * Update JSMN_PRIMITIVE token in storage
- */
-int jsmn_utils_fill_token(json_manager *man, jsmntok_t *token, float val) {
-    
-    return jsmn_utils_fill_token(man, token, "%g", val);
-}
-
-/**
- * Return apropriate token from token list
- *    @param man - tokens io manager
- *    @param path - defines orders and keys in way to the token
- *      each level is separated with '\' keys suppose to be string, order in array is preceded with @ 
- *         anonymous object denotes empty "\\" path section
-
- *  for example - "\config\users\@5\name" //acess the key token itself
- *              - "\config\rf\@5\address\@1" //acess the value of key
- *
- * \todo - otestovat!
  */
 jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *xpath) {
    
@@ -299,7 +255,7 @@ jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *xpath) {
             tok++;
         break;
 
-        case '@': //iterrate trought sub-tokens
+        case '@': //iterrate through sub-tokens
             if(count < 0)
                 if(1 != sscanf(xpath, "@%d", &count))  //how much itteration?
                     return NULL; //path error
@@ -342,72 +298,6 @@ jsmntok_t *jsmn_utils_get_token(json_manager *man, const char *xpath) {
 }
 
 /**
- * Return apropriate value of primitive
- *    see jsmn_utils_get_token for usage
- *    @return - JASON_PRIM_NAN if not exist or failure
- */
-float jsmn_utils_read_primitive(json_manager *man, const char *path, float def){
-    
-    float number;
-  
-    if(!man)
-      return def;
-
-    jsmntok_t *tok = jsmn_utils_get_token(man, path);
-    
-    if((NULL == tok) || (tok->type != JSMN_PRIMITIVE)) //undesired type
-      return def;  
-
-    if(1 != sscanf(&man->p[tok->start], "%g", &number))
-      return def;
-
-    return number;
-}
-
-/**
- * Return apropriate value of primitive
- *    see jsmn_utils_get_token for usage
- *    @return - JASON_PRIM_NAN if not exist or failure
- */
-int jsmn_utils_read_primitive(json_manager *man, const char *path, int def){
-
-    int number;
-
-    if(!man)
-      return def;
-
-    jsmntok_t *tok = jsmn_utils_get_token(man, path);
-
-    if((NULL == tok) || (tok->type != JSMN_PRIMITIVE)) //undesired type
-      return def;
-
-    if(1 != sscanf(&man->p[tok->start], "%d", &number))
-      return def;
-
-    return number;
-}
-
-/**
- * Return apropriate string
- *    see jsmn_utils_get_token for usage
- */
-const char *jsmn_utils_read_string(json_manager *man, const char *path) {
-    
-    jsmntok_t *tok = jsmn_utils_get_token(man, path);
-    
-    if((NULL == tok) || (tok->type != JSMN_STRING)) //undesired type
-      return NULL;  
-
-    return &man->p[tok->start];
-}
-
-/**
- * Space optimalization/shrink data only - exculde placeholder in token to shring
- *    size to minimal on json data buffer directly; token array is not useful again!!
- *
- * \note this is lazy verzion - exclude placeholders characters only
- * if you wish to continue with editing tokens you have to call
- * parser again
  */
 int jsmn_utils_done(json_manager *man) {
 
@@ -428,5 +318,74 @@ int jsmn_utils_done(json_manager *man) {
      */
 
     return 1;
+}
+
+
+/**
+ */
+double jsmn_utils_read_double(json_manager *man, const char *path, double def){
+
+    jsmntok_t *tok = jsmn_utils_get_token(man, path);
+    if((NULL == tok) || (tok->type != JSMN_PRIMITIVE)) //unwanted type
+      return def;
+
+    double number;
+    if(1 != sscanf(&man->p[tok->start], "%lf", &number))
+      return def;
+
+    return number;
+}
+
+/**
+ */
+int jsmn_utils_read_int(json_manager *man, const char *path, int def){
+
+    jsmntok_t *tok = jsmn_utils_get_token(man, path);
+    if((NULL == tok) || (tok->type != JSMN_PRIMITIVE)) //unwanted type
+      return def;
+
+    int number;
+    if(1 != sscanf(&man->p[tok->start], "%d", &number))
+      return def;
+
+    return number;
+}
+
+/**
+ */
+const char *jsmn_utils_read_string(json_manager *man, const char *path) {
+
+    jsmntok_t *tok = jsmn_utils_get_token(man, path);
+    if((NULL == tok) || (tok->type != JSMN_STRING)) //unwanted type
+      return NULL;
+
+    return &man->p[tok->start];
+}
+
+/**
+ */
+jsmntok_t *jsmn_utils_new_string(json_manager *man, const char *str, size_t reserv) {
+
+    jsmntok_t *tok = jsmn_utils_new_token(man, (reserv) ? reserv : strlen(str)+1, JSMN_STRING);
+    if(tok) jsmn_utils_fill_token(man, tok, "%s", str);
+    return tok;
+}
+
+/**
+ */
+jsmntok_t *jsmn_utils_new_double(json_manager *man, double val, size_t reserv) {
+
+    jsmntok_t *tok = jsmn_utils_new_token(man, (reserv) ? reserv : 24, JSMN_PRIMITIVE);
+    if(tok) jsmn_utils_fill_token(man, tok, "%lf", val);
+    return tok;
+}
+
+/**
+ */
+jsmntok_t *jsmn_utils_new_int(json_manager *man, int val, size_t reserv) {
+
+    jsmntok_t *tok = jsmn_utils_new_token(man, (reserv) ? reserv : 32, JSMN_PRIMITIVE);
+    if(tok) jsmn_utils_fill_token(man, tok, "%d", val);
+    return tok;
 }
 
